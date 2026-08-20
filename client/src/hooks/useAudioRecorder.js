@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
- * Custom hook for fast-response voice recognition with immediate silence detection
- * @param {Function} onTranscript - Callback receiving user's spoken phrase
+ * Custom hook for turn-based speech recognition with echo cancellation
+ * @param {Function} onTranscript - Callback receiving single spoken user phrase
  */
 export function useAudioRecorder(onTranscript) {
   const [isRecording, setIsRecording] = useState(false);
@@ -10,64 +10,57 @@ export function useAudioRecorder(onTranscript) {
   
   const recognitionRef = useRef(null);
   const streamRef = useRef(null);
-  const silenceTimerRef = useRef(null);
-  const currentTranscriptRef = useRef('');
+  const isProcessingRef = useRef(false);
 
-  // Configure Web Speech Recognition for instant response
+  // Initialize single-turn speech recognition
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true; // Enable interim results for instant detection
+      recognition.continuous = false; // Turn-based single phrase recognition
+      recognition.interimResults = false; // Send only finalized phrase
       recognition.lang = 'en-US';
 
       recognition.onresult = (event) => {
-        let interimText = '';
-        let finalText = '';
+        if (isProcessingRef.current) return;
 
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const text = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalText += text;
-          } else {
-            interimText += text;
-          }
-        }
+        const transcriptText = event.results[0][0].transcript.trim();
+        if (transcriptText && onTranscript) {
+          isProcessingRef.current = true;
+          onTranscript(transcriptText);
 
-        const candidateText = (finalText || interimText).trim();
-        if (candidateText) {
-          currentTranscriptRef.current = candidateText;
-
-          // Clear existing silence timer
-          if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-          }
-
-          // Trigger response after 500ms of user silence (instant turn response!)
-          silenceTimerRef.current = setTimeout(() => {
-            if (currentTranscriptRef.current && onTranscript) {
-              onTranscript(currentTranscriptRef.current);
-              currentTranscriptRef.current = '';
-            }
-          }, 500);
+          // Reset processing lock after brief delay
+          setTimeout(() => {
+            isProcessingRef.current = false;
+          }, 1500);
         }
       };
 
       recognition.onerror = (event) => {
-        if (event.error !== 'no-speech') {
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
           console.warn('Speech Recognition notice:', event.error);
+        }
+      };
+
+      recognition.onend = () => {
+        // Automatically restart listening if call session is still active and not processing
+        if (isRecording && !isProcessingRef.current && recognitionRef.current) {
+          try {
+            recognitionRef.current.start();
+          } catch {
+            // Ignored
+          }
         }
       };
 
       recognitionRef.current = recognition;
     }
-  }, [onTranscript]);
+  }, [onTranscript, isRecording]);
 
-  // Start microphone & instant speech engine
+  // Start microphone
   const startRecording = useCallback(async () => {
     setPermissionError(null);
-    currentTranscriptRef.current = '';
+    isProcessingRef.current = false;
 
     try {
       if (recognitionRef.current) {
@@ -89,9 +82,7 @@ export function useAudioRecorder(onTranscript) {
 
   // Stop microphone
   const stopRecording = useCallback(() => {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-    }
+    isProcessingRef.current = false;
 
     if (recognitionRef.current) {
       try {
@@ -106,7 +97,6 @@ export function useAudioRecorder(onTranscript) {
     }
 
     setIsRecording(false);
-    currentTranscriptRef.current = '';
   }, []);
 
   return {

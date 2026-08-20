@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { StatusBadge } from './components/StatusBadge';
@@ -8,6 +8,8 @@ import { HealthReport } from './components/HealthReport';
 import { Stethoscope, ShieldCheck, HeartPulse } from 'lucide-react';
 
 export default function App() {
+  const lastSentTextRef = useRef('');
+
   const {
     status,
     transcript,
@@ -18,11 +20,24 @@ export default function App() {
     sendUserText
   } = useWebSocket('ws://localhost:5000');
 
-  // Callback for instant real-time voice speech recognition
+  // Callback for clean single-turn voice speech recognition
   const handleVoiceTranscript = (spokenText) => {
-    if (spokenText && status !== 'THINKING' && status !== 'SPEAKING') {
-      sendUserText(spokenText);
+    if (!spokenText || status === 'THINKING' || status === 'SPEAKING' || status === 'GENERATING_REPORT') {
+      return;
     }
+
+    // Ignore exact duplicate phrases
+    if (lastSentTextRef.current === spokenText.trim().toLowerCase()) {
+      return;
+    }
+
+    lastSentTextRef.current = spokenText.trim().toLowerCase();
+    sendUserText(spokenText.trim());
+
+    // Clear duplicate guard after 3 seconds
+    setTimeout(() => {
+      lastSentTextRef.current = '';
+    }, 3000);
   };
 
   const {
@@ -34,6 +49,7 @@ export default function App() {
 
   // Handle Start Call
   const handleStartCall = async () => {
+    lastSentTextRef.current = '';
     initWsCall();
     await startRecording();
   };
@@ -83,7 +99,7 @@ export default function App() {
             Interactive AI Patient Intake Screener
           </h2>
           <p className="text-sm text-slate-400 max-w-xl mx-auto mt-1">
-            Conduct a preliminary health assessment using instant voice recognition in English or Hindi.
+            Conduct a preliminary health assessment using natural voice turns in English or Hindi.
           </p>
         </div>
 
