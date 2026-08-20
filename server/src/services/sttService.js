@@ -1,25 +1,35 @@
 import OpenAI from 'openai';
 import { config } from '../config/env.js';
 
-const openai = config.openaiApiKey ? new OpenAI({ apiKey: config.openaiApiKey }) : null;
+let aiClient = null;
+
+if (config.groqApiKey && config.groqApiKey.startsWith('gsk_')) {
+  aiClient = new OpenAI({
+    apiKey: config.groqApiKey,
+    baseURL: 'https://api.groq.com/openai/v1'
+  });
+} else if (config.openaiApiKey && !config.openaiApiKey.includes('your_')) {
+  aiClient = new OpenAI({ apiKey: config.openaiApiKey });
+}
 
 /**
- * Transcribe binary audio buffer or base64 stream to text
+ * Transcribe binary audio buffer or base64 stream to text using Groq Whisper or OpenAI
  * @param {Buffer|ArrayBuffer} audioBuffer - Binary audio payload (WebM/WAV)
  * @param {string} mimeType - Audio mime type
  * @returns {Promise<string>} Transcribed text
  */
 export async function transcribeAudio(audioBuffer, mimeType = 'audio/webm') {
-  if (!openai) {
-    // Return sample fallback string for local keyless testing
-    return "Hi, my name is John Doe and I have had a severe headache for 2 days.";
+  if (!aiClient) {
+    return "Hi, my name is Ananya Darna and I have a severe headache for 2 days.";
   }
 
   try {
     const file = new File([audioBuffer], 'input_audio.webm', { type: mimeType });
-    const transcription = await openai.audio.transcriptions.create({
+    const model = config.groqApiKey ? 'whisper-large-v3' : 'whisper-1';
+
+    const transcription = await aiClient.audio.transcriptions.create({
       file,
-      model: 'whisper-1',
+      model,
     });
 
     return transcription.text || '';

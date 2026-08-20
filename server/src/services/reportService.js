@@ -1,18 +1,26 @@
 import OpenAI from 'openai';
 import { config } from '../config/env.js';
 
-const openai = (config.openaiApiKey && !config.openaiApiKey.includes('your_')) 
-  ? new OpenAI({ apiKey: config.openaiApiKey }) 
-  : null;
+let aiClient = null;
+let isGroq = false;
+
+if (config.groqApiKey && config.groqApiKey.startsWith('gsk_')) {
+  aiClient = new OpenAI({
+    apiKey: config.groqApiKey,
+    baseURL: 'https://api.groq.com/openai/v1'
+  });
+  isGroq = true;
+} else if (config.openaiApiKey && !config.openaiApiKey.includes('your_')) {
+  aiClient = new OpenAI({ apiKey: config.openaiApiKey });
+}
 
 /**
- * Intelligent Zero-Cost Medical Intake Report Generator
+ * Intelligent Medical Intake Report Extractor
  */
 function extractSmartReport(transcriptHistory = []) {
   const userTurns = transcriptHistory.filter(t => t.role === 'user').map(t => t.content);
   const fullUserText = userTurns.join(' ');
 
-  // Extract Name (Turn 1 or text matching)
   let patientName = 'Not Provided';
   if (userTurns.length > 0) {
     const text = userTurns[0];
@@ -24,27 +32,23 @@ function extractSmartReport(transcriptHistory = []) {
     }
   }
 
-  // Extract Chief Complaint (Turn 2 or keywords)
   let chiefComplaint = userTurns[1] || userTurns[0] || 'General Health Discomfort';
-  if (fullUserText.toLowerCase().includes('headache')) chiefComplaint = 'Severe Headache & Fever';
+  if (fullUserText.toLowerCase().includes('headache')) chiefComplaint = 'Severe Headache & Mild Fever';
   else if (fullUserText.toLowerCase().includes('chest pain')) chiefComplaint = 'Chest Pain / Pressure';
-  else if (fullUserText.toLowerCase().includes('cough')) chiefComplaint = 'Persistent Cough & Respiratory Concern';
+  else if (fullUserText.toLowerCase().includes('cough')) chiefComplaint = 'Persistent Cough & Cold';
 
-  // Extract Duration (Turn 3 or text matching)
   let duration = userTurns[2] || '2 Days';
   const durationMatch = fullUserText.match(/(\d+\s*(?:days?|weeks?|hours?|months?))/i);
   if (durationMatch) {
     duration = durationMatch[1];
   }
 
-  // Extract Severity (Turn 4 or numbers)
-  let severity = '6 / 10 (Moderate)';
+  let severity = '7 / 10';
   const severityMatch = fullUserText.match(/\b([1-9]|10)\b(?:\s*out of\s*10|\/10)?/i);
   if (severityMatch) {
     severity = `${severityMatch[1]} / 10`;
   }
 
-  // Extract Secondary Symptoms
   const associatedSymptoms = [];
   if (fullUserText.toLowerCase().includes('fever')) associatedSymptoms.push('Low-grade fever');
   if (fullUserText.toLowerCase().includes('dizziness')) associatedSymptoms.push('Dizziness');
@@ -58,13 +62,13 @@ function extractSmartReport(transcriptHistory = []) {
     duration,
     severity,
     associatedSymptoms,
-    summary: `Patient ${patientName} presents with ${chiefComplaint} lasting ${duration} rated at ${severity}.`,
-    flaggedFollowUp: 'Monitor symptoms closely. If fever increases above 101°F or severe weakness occurs, seek medical evaluation.'
+    summary: `Patient ${patientName} presents with ${chiefComplaint} lasting ${duration} rated at a severity of ${severity}.`,
+    flaggedFollowUp: 'Monitor symptoms closely. If fever increases or severe weakness occurs, consult a physician.'
   };
 }
 
 /**
- * Generate structured medical report from transcript
+ * Generate structured medical report from transcript using Groq or OpenAI
  * @param {Array} transcriptHistory - Array of dialogue turns
  * @returns {Promise<Object>} Formatted JSON report
  */
@@ -82,7 +86,7 @@ export async function generateHealthReport(transcriptHistory = []) {
     };
   }
 
-  if (!openai) {
+  if (!aiClient) {
     return extractSmartReport(transcriptHistory);
   }
 
@@ -106,14 +110,23 @@ export async function generateHealthReport(transcriptHistory = []) {
     }
     `;
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const model = isGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini';
+
+    const response = await aiClient.chat.completions.create({
+      model,
       messages: [{ role: 'user', content: prompt }],
-      response_format: { type: 'json_object' }
+      response_format: isGroq ? undefined : { type: 'json_object' }
     });
 
-    return { status: 'COMPLETE', ...JSON.parse(response.choices[0].message.content) };
+    const content = response.choices[0]?.message?.content?.trim() || '';
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return { status: 'COMPLETE', ...JSON.parse(jsonMatch[0]) };
+    }
+
+    return extractSmartReport(transcriptHistory);
   } catch (error) {
+    console.warn(`[Report Error]: ${error.message}. Using fallback clinical extraction.`);
     return extractSmartReport(transcriptHistory);
   }
 }

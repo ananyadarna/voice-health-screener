@@ -4,6 +4,7 @@ dotenv.config();
 // Export loaded environment variables with defaults
 export const config = {
   port: process.env.PORT || 5000,
+  groqApiKey: process.env.GROQ_API_KEY || '',
   openaiApiKey: process.env.OPENAI_API_KEY || '',
   deepgramApiKey: process.env.DEEPGRAM_API_KEY || '',
   elevenlabsApiKey: process.env.ELEVENLABS_API_KEY || '',

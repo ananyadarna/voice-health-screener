@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { config } from '../config/env.js';
 
-// Empathetic System Prompt for LLM
+// System prompt guiding the AI to act as an empathetic health intake assistant
 export const INTAKE_SYSTEM_PROMPT = `
 You are an empathetic medical intake voice assistant conducting a preliminary health screening.
 Your goal is to collect the following information efficiently and gently:
@@ -19,13 +19,23 @@ RULES:
 - You can communicate in English or Hindi depending on the language used by the user.
 `;
 
-// Initialize OpenAI client if valid key is set
-const openai = (config.openaiApiKey && !config.openaiApiKey.includes('your_')) 
-  ? new OpenAI({ apiKey: config.openaiApiKey }) 
-  : null;
+// Priority 1: Groq Cloud AI (100% Free) -> Priority 2: OpenAI
+let aiClient = null;
+let isGroq = false;
+
+if (config.groqApiKey && config.groqApiKey.startsWith('gsk_')) {
+  aiClient = new OpenAI({
+    apiKey: config.groqApiKey,
+    baseURL: 'https://api.groq.com/openai/v1'
+  });
+  isGroq = true;
+} else if (config.openaiApiKey && !config.openaiApiKey.includes('your_')) {
+  aiClient = new OpenAI({ apiKey: config.openaiApiKey });
+  isGroq = false;
+}
 
 /**
- * Smart Free Intake Dialogue State Machine (Zero-Cost Local AI Engine)
+ * Smart Free Intake Dialogue State Machine (Fallback)
  */
 function getSmartIntakeTurn(history = []) {
   const userTurns = history.filter(h => h.role === 'user');
@@ -35,31 +45,26 @@ function getSmartIntakeTurn(history = []) {
     return "Hello! I am your AI health intake assistant. May I please have your full name to get started?";
   }
 
-  const lastUserText = userTurns[userTurns.length - 1]?.content?.toLowerCase() || '';
+  const lastUserText = userTurns[userTurns.length - 1]?.content || '';
 
-  // Step 1 -> Step 2: Name recorded -> Ask Primary Symptom
   if (count === 1) {
-    const nameMatch = userTurns[0].content.replace(/my name is|i am|this is/gi, '').trim();
+    const nameMatch = lastUserText.replace(/my name is|i am|this is/gi, '').trim();
     const name = nameMatch ? nameMatch.split(' ')[0] : 'there';
     return `Thank you ${name}. What primary symptom or health concern are you experiencing today?`;
   }
 
-  // Step 2 -> Step 3: Symptom recorded -> Ask Onset/Duration
   if (count === 2) {
     return "I understand. When did this symptom first start, and how long has it been bothering you?";
   }
 
-  // Step 3 -> Step 4: Duration recorded -> Ask Severity
   if (count === 3) {
     return "Thank you for sharing that. On a scale of 1 to 10, how severe would you rate your discomfort right now?";
   }
 
-  // Step 4 -> Step 5: Severity recorded -> Ask Secondary Symptoms
   if (count === 4) {
     return "Got it. Are you experiencing any other secondary symptoms like fever, nausea, or dizziness?";
   }
 
-  // Step 5+: Assessment Complete
   return "Thank you so much for providing all those details. I have recorded your intake information and will now generate your clinical summary report.";
 }
 
@@ -69,7 +74,7 @@ function getSmartIntakeTurn(history = []) {
  * @returns {Promise<string>} AI text reply
  */
 export async function getAIResponse(history = []) {
-  if (!openai) {
+  if (!aiClient) {
     return getSmartIntakeTurn(history);
   }
 
@@ -79,8 +84,10 @@ export async function getAIResponse(history = []) {
       ...history
     ];
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const model = isGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini';
+
+    const response = await aiClient.chat.completions.create({
+      model,
       messages,
       temperature: 0.7,
       max_tokens: 120
@@ -88,7 +95,7 @@ export async function getAIResponse(history = []) {
 
     return response.choices[0]?.message?.content?.trim() || getSmartIntakeTurn(history);
   } catch (error) {
-    // Catch quota errors (429) or connection issues and seamlessly use free intake engine
+    console.warn(`[LLM Error]: ${error.message}. Using intake state machine turn.`);
     return getSmartIntakeTurn(history);
   }
 }
