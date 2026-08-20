@@ -26,12 +26,13 @@ export default function App() {
     setSpeechText(text);
   }, []);
 
-  // 3. Audio Recorder Hook
+  // 3. Audio Recorder Hook with Buffer Reset
   const {
     isRecording,
     permissionError,
     startRecording,
-    stopRecording
+    stopRecording,
+    resetSpeechBuffer
   } = useAudioRecorder(handleLiveSpeechText);
 
   // Handle Start Call
@@ -57,10 +58,11 @@ export default function App() {
     }
   };
 
-  // Send turn text
+  // Send turn text & reset speech recognition buffer for new turn
   const handleSendText = (text) => {
     sendUserText(text);
     setSpeechText('');
+    resetSpeechBuffer();
   };
 
   return (

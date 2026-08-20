@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
- * Custom hook for Gemini-style Speech-to-Text with speaker echo suppression
+ * Custom hook for Gemini-style Speech-to-Text with per-turn buffer clearing
  * @param {Function} onSpeechText - Callback receiving real-time transcribed text
  */
 export function useAudioRecorder(onSpeechText) {
@@ -11,13 +11,26 @@ export function useAudioRecorder(onSpeechText) {
   const recognitionRef = useRef(null);
   const streamRef = useRef(null);
   const onSpeechTextRef = useRef(onSpeechText);
+  const resultOffsetRef = useRef(0);
 
   // Keep callback reference updated
   useEffect(() => {
     onSpeechTextRef.current = onSpeechText;
   }, [onSpeechText]);
 
-  // Initialize Speech Recognition with AI speaker echo guard
+  // Clear speech buffer for new turn
+  const resetSpeechBuffer = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        resultOffsetRef.current = recognitionRef.current.resultIndex || 0;
+        recognitionRef.current.stop();
+      } catch {
+        // Ignored
+      }
+    }
+  }, []);
+
+  // Initialize Speech Recognition with per-turn offset tracking
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -33,7 +46,8 @@ export function useAudioRecorder(onSpeechText) {
         }
 
         let transcript = '';
-        for (let i = 0; i < event.results.length; i++) {
+        // Only accumulate results starting from resultOffsetRef
+        for (let i = resultOffsetRef.current; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
 
@@ -48,13 +62,26 @@ export function useAudioRecorder(onSpeechText) {
         }
       };
 
+      recognition.onend = () => {
+        // Auto restart recognition with fresh result offset for new turn
+        if (streamRef.current && recognitionRef.current) {
+          try {
+            resultOffsetRef.current = 0;
+            recognitionRef.current.start();
+          } catch {
+            // Ignored
+          }
+        }
+      };
+
       recognitionRef.current = recognition;
     }
   }, []);
 
-  // Start microphone & real-time text population
+  // Start microphone
   const startRecording = useCallback(async () => {
     setPermissionError(null);
+    resultOffsetRef.current = 0;
 
     try {
       if (recognitionRef.current) {
@@ -76,6 +103,8 @@ export function useAudioRecorder(onSpeechText) {
 
   // Stop microphone
   const stopRecording = useCallback(() => {
+    resultOffsetRef.current = 0;
+
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -86,6 +115,7 @@ export function useAudioRecorder(onSpeechText) {
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     }
 
     setIsRecording(false);
@@ -95,6 +125,7 @@ export function useAudioRecorder(onSpeechText) {
     isRecording,
     permissionError,
     startRecording,
-    stopRecording
+    stopRecording,
+    resetSpeechBuffer
   };
 }
