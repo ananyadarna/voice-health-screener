@@ -1,10 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
+// Production or Development WebSocket URL configuration
+const DEFAULT_WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:5000';
+
 /**
  * Custom hook to handle WebSocket connection, audio queue playback, and Web Speech API fallback
  * @param {string} url - WebSocket server URL
  */
-export function useWebSocket(url = 'ws://localhost:5000') {
+export function useWebSocket(url = DEFAULT_WS_URL) {
   const [status, setStatus] = useState('IDLE');
   const [transcript, setTranscript] = useState([]);
   const [report, setReport] = useState(null);
@@ -24,20 +27,33 @@ export function useWebSocket(url = 'ws://localhost:5000') {
       
       setStatus('SPEAKING');
       window.isAISpeaking = true;
+      if (window.pauseSpeechRecognition) window.pauseSpeechRecognition();
+
+      utterance.onstart = () => {
+        setStatus('SPEAKING');
+        window.isAISpeaking = true;
+        if (window.pauseSpeechRecognition) window.pauseSpeechRecognition();
+      };
 
       utterance.onend = () => {
-        setStatus('LISTENING');
-        window.isAISpeaking = false;
+        setTimeout(() => {
+          setStatus('LISTENING');
+          window.isAISpeaking = false;
+          if (window.resumeSpeechRecognition) window.resumeSpeechRecognition();
+        }, 400);
       };
+
       utterance.onerror = () => {
         setStatus('LISTENING');
         window.isAISpeaking = false;
+        if (window.resumeSpeechRecognition) window.resumeSpeechRecognition();
       };
       
       window.speechSynthesis.speak(utterance);
     } else {
       setStatus('LISTENING');
       window.isAISpeaking = false;
+      if (window.resumeSpeechRecognition) window.resumeSpeechRecognition();
     }
   }, []);
 
@@ -46,11 +62,14 @@ export function useWebSocket(url = 'ws://localhost:5000') {
     if (audioQueueRef.current.length === 0) {
       isPlayingRef.current = false;
       window.isAISpeaking = false;
+      if (window.resumeSpeechRecognition) window.resumeSpeechRecognition();
       return;
     }
 
     isPlayingRef.current = true;
     window.isAISpeaking = true;
+    if (window.pauseSpeechRecognition) window.pauseSpeechRecognition();
+
     const item = audioQueueRef.current.shift();
     
     if (!item || !item.audio) {
@@ -59,6 +78,7 @@ export function useWebSocket(url = 'ws://localhost:5000') {
       } else {
         setStatus('LISTENING');
         window.isAISpeaking = false;
+        if (window.resumeSpeechRecognition) window.resumeSpeechRecognition();
       }
       isPlayingRef.current = false;
       return;
@@ -68,11 +88,15 @@ export function useWebSocket(url = 'ws://localhost:5000') {
       const audio = new Audio(`data:audio/mp3;base64,${item.audio}`);
       setStatus('SPEAKING');
       window.isAISpeaking = true;
+      if (window.pauseSpeechRecognition) window.pauseSpeechRecognition();
       
       audio.onended = () => {
-        setStatus('LISTENING');
-        window.isAISpeaking = false;
-        playNextAudio();
+        setTimeout(() => {
+          setStatus('LISTENING');
+          window.isAISpeaking = false;
+          if (window.resumeSpeechRecognition) window.resumeSpeechRecognition();
+          playNextAudio();
+        }, 400);
       };
       
       audio.onerror = () => {
@@ -126,8 +150,10 @@ export function useWebSocket(url = 'ws://localhost:5000') {
             setStatus(payload.status);
             if (payload.status === 'SPEAKING' || payload.status === 'THINKING') {
               window.isAISpeaking = true;
+              if (window.pauseSpeechRecognition) window.pauseSpeechRecognition();
             } else {
               window.isAISpeaking = false;
+              if (window.resumeSpeechRecognition) window.resumeSpeechRecognition();
             }
             break;
 
@@ -160,11 +186,13 @@ export function useWebSocket(url = 'ws://localhost:5000') {
             setReport(payload.report);
             setStatus('IDLE');
             window.isAISpeaking = false;
+            if (window.resumeSpeechRecognition) window.resumeSpeechRecognition();
             break;
 
           case 'ERROR':
             setError(payload.message || 'An error occurred during intake.');
             window.isAISpeaking = false;
+            if (window.resumeSpeechRecognition) window.resumeSpeechRecognition();
             break;
 
           default:
@@ -193,6 +221,9 @@ export function useWebSocket(url = 'ws://localhost:5000') {
   // Send textual user message turn
   const sendUserText = useCallback((text) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && text.trim()) {
+      window.isAISpeaking = true;
+      if (window.pauseSpeechRecognition) window.pauseSpeechRecognition();
+
       setTranscript((prev) => [
         ...prev,
         { role: 'user', text: text.trim(), time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }

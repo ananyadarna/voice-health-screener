@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
- * Custom hook for Gemini-style Speech-to-Text with per-turn buffer clearing
+ * Custom hook for Gemini-style Speech-to-Text with physical microphone auto-pausing during AI speech
  * @param {Function} onSpeechText - Callback receiving real-time transcribed text
  */
 export function useAudioRecorder(onSpeechText) {
@@ -12,17 +12,49 @@ export function useAudioRecorder(onSpeechText) {
   const streamRef = useRef(null);
   const onSpeechTextRef = useRef(onSpeechText);
   const resultOffsetRef = useRef(0);
+  const isPausedByAIRef = useRef(false);
 
   // Keep callback reference updated
   useEffect(() => {
     onSpeechTextRef.current = onSpeechText;
   }, [onSpeechText]);
 
+  // Expose global pause / resume functions for WebSocket TTS events
+  useEffect(() => {
+    window.pauseSpeechRecognition = () => {
+      isPausedByAIRef.current = true;
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {
+          // Ignored
+        }
+      }
+    };
+
+    window.resumeSpeechRecognition = () => {
+      isPausedByAIRef.current = false;
+      resultOffsetRef.current = 0;
+      if (recognitionRef.current && streamRef.current) {
+        try {
+          recognitionRef.current.start();
+        } catch {
+          // Ignored
+        }
+      }
+    };
+
+    return () => {
+      delete window.pauseSpeechRecognition;
+      delete window.resumeSpeechRecognition;
+    };
+  }, []);
+
   // Clear speech buffer for new turn
   const resetSpeechBuffer = useCallback(() => {
+    resultOffsetRef.current = 0;
     if (recognitionRef.current) {
       try {
-        resultOffsetRef.current = recognitionRef.current.resultIndex || 0;
         recognitionRef.current.stop();
       } catch {
         // Ignored
@@ -30,7 +62,7 @@ export function useAudioRecorder(onSpeechText) {
     }
   }, []);
 
-  // Initialize Speech Recognition with per-turn offset tracking
+  // Initialize Speech Recognition with physical AI pause guard
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -40,13 +72,12 @@ export function useAudioRecorder(onSpeechText) {
       recognition.lang = 'en-US';
 
       recognition.onresult = (event) => {
-        // Ignore microphone input while AI is speaking out loud (prevents speaker echo!)
-        if (window.isAISpeaking) {
+        // Ignore microphone input while AI is speaking out loud or paused
+        if (window.isAISpeaking || isPausedByAIRef.current) {
           return;
         }
 
         let transcript = '';
-        // Only accumulate results starting from resultOffsetRef
         for (let i = resultOffsetRef.current; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
@@ -63,10 +94,9 @@ export function useAudioRecorder(onSpeechText) {
       };
 
       recognition.onend = () => {
-        // Auto restart recognition with fresh result offset for new turn
-        if (streamRef.current && recognitionRef.current) {
+        // Auto restart recognition ONLY if not paused by AI and session active
+        if (streamRef.current && !isPausedByAIRef.current && !window.isAISpeaking && recognitionRef.current) {
           try {
-            resultOffsetRef.current = 0;
             recognitionRef.current.start();
           } catch {
             // Ignored
@@ -82,6 +112,7 @@ export function useAudioRecorder(onSpeechText) {
   const startRecording = useCallback(async () => {
     setPermissionError(null);
     resultOffsetRef.current = 0;
+    isPausedByAIRef.current = false;
 
     try {
       if (recognitionRef.current) {
@@ -104,6 +135,7 @@ export function useAudioRecorder(onSpeechText) {
   // Stop microphone
   const stopRecording = useCallback(() => {
     resultOffsetRef.current = 0;
+    isPausedByAIRef.current = false;
 
     if (recognitionRef.current) {
       try {
