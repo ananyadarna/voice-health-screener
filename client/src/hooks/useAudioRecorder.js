@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
- * Custom hook to handle real-time continuous browser Speech Recognition & microphone recording
- * @param {Function} onTranscript - Callback receiving real-time transcribed user speech text
+ * Custom hook for microphone recording and single-fire Web Speech Recognition
+ * @param {Function} onTranscript - Callback receiving transcribed speech
  */
 export function useAudioRecorder(onTranscript) {
   const [isRecording, setIsRecording] = useState(false);
@@ -11,8 +11,9 @@ export function useAudioRecorder(onTranscript) {
   const recognitionRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
+  const processedIndicesRef = useRef(new Set());
 
-  // Initialize Web Speech Recognition engine if supported by browser
+  // Initialize Web Speech Recognition
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -22,17 +23,20 @@ export function useAudioRecorder(onTranscript) {
       recognition.lang = 'en-US';
 
       recognition.onresult = (event) => {
-        const lastIndex = event.results.length - 1;
-        const transcriptText = event.results[lastIndex][0].transcript.trim();
-        
-        if (transcriptText && onTranscript) {
-          onTranscript(transcriptText);
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal && !processedIndicesRef.current.has(i)) {
+            processedIndicesRef.current.add(i);
+            const transcriptText = event.results[i][0].transcript.trim();
+            if (transcriptText && onTranscript) {
+              onTranscript(transcriptText);
+            }
+          }
         }
       };
 
       recognition.onerror = (event) => {
         if (event.error !== 'no-speech') {
-          console.warn('Web Speech Recognition error:', event.error);
+          console.warn('Speech Recognition notice:', event.error);
         }
       };
 
@@ -40,35 +44,35 @@ export function useAudioRecorder(onTranscript) {
     }
   }, [onTranscript]);
 
-  // Start microphone stream and instant speech recognition
+  // Start microphone and speech recognition
   const startRecording = useCallback(async () => {
     setPermissionError(null);
+    processedIndicesRef.current.clear();
+
     try {
-      // 1. Start browser native Web Speech Recognition for instant transcription
       if (recognitionRef.current) {
         try {
           recognitionRef.current.start();
         } catch {
-          // Already started
+          // Already active
         }
       }
 
-      // 2. Start MediaRecorder as audio stream backup
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = mediaRecorder;
-
       mediaRecorder.start(500);
+
       setIsRecording(true);
     } catch (error) {
-      console.error('Microphone access denied:', error);
-      setPermissionError('Microphone access is denied or unsupported in this browser.');
+      console.error('Microphone access error:', error);
+      setPermissionError('Microphone access is denied or unsupported.');
     }
   }, []);
 
-  // Stop microphone recording and speech recognition
+  // Stop microphone and speech recognition
   const stopRecording = useCallback(() => {
     if (recognitionRef.current) {
       try {
@@ -87,6 +91,7 @@ export function useAudioRecorder(onTranscript) {
     }
 
     setIsRecording(false);
+    processedIndicesRef.current.clear();
   }, []);
 
   return {
