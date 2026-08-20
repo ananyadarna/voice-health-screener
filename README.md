@@ -1,7 +1,7 @@
 # Voice-Driven Health Intake Screener
 
-[![Live Demo](https://img.shields.io/badge/Live-Demo-6366f1?style=for-the-badge&logo=vercel&logoColor=white)](https://voice-health-screener-omega.vercel.app/)
-[![Backend Server](https://img.shields.io/badge/Backend-Render_WS-06b6d4?style=for-the-badge&logo=render&logoColor=white)](https://voice-health-screener-f0ui.onrender.com)
+[![Vercel Deployment](https://img.shields.io/badge/Vercel-Live_App-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://voice-health-screener-omega.vercel.app/)
+[![Video Demo](https://img.shields.io/badge/Video_Demo-Google_Drive-4285F4?style=for-the-badge&logo=googledrive&logoColor=white)](https://drive.google.com/file/d/1U06ZzERlK_mTjeONJXeOr8MLV-mk94Bx/view?usp=sharing)
 [![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ananyadarna/voice-health-screener.git)
 [![React 18](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
@@ -13,7 +13,8 @@ An end-to-end, voice-driven web application enabling patients to conduct an inte
 
 ## Project Links
 
-- **Live Application Demo**: https://voice-health-screener-omega.vercel.app/
+- **Live Vercel Application Demo**: https://voice-health-screener-omega.vercel.app/
+- **Live Video Demo (Google Drive)**: https://drive.google.com/file/d/1U06ZzERlK_mTjeONJXeOr8MLV-mk94Bx/view?usp=sharing
 - **Live Backend HTTP Server**: https://voice-health-screener-f0ui.onrender.com
 - **Live Backend WebSocket Endpoint**: wss://voice-health-screener-f0ui.onrender.com
 - **Source Code Repository**: https://github.com/ananyadarna/voice-health-screener.git
@@ -187,5 +188,5 @@ Access the frontend application at `http://localhost:5173`.
 ### Frontend (Vercel)
 1. Import the repository into Vercel.
 2. Set Root Directory to `client` and Framework Preset to `Vite`.
-3. Add Environment Variable: `VITE_WS_URL=wss://voice-health-screener-f0ui.onrender.com`.
+3. Set Environment Variable: `VITE_WS_URL=wss://voice-health-screener-f0ui.onrender.com`.
 4. Deploy the application.
