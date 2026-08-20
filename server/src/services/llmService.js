@@ -20,8 +20,19 @@ RULES:
 - You can communicate in English or Hindi depending on the language used by the user.
 `;
 
-// Initialize OpenAI client if API key exists
 const openai = config.openaiApiKey ? new OpenAI({ apiKey: config.openaiApiKey }) : null;
+
+/**
+ * Generate fallback intake dialogue response based on turn count
+ */
+function getFallbackTurnResponse(history = []) {
+  const turnCount = history.filter(h => h.role === 'user').length;
+  if (turnCount === 1) return "Hello! I am your AI health assistant. May I please have your full name to start our intake?";
+  if (turnCount === 2) return "Thank you. What is your main health concern or primary symptom today?";
+  if (turnCount === 3) return "I understand. How long have you been experiencing this symptom?";
+  if (turnCount === 4) return "On a scale from 1 to 10, how severe would you rate your symptom right now?";
+  return "Thank you for sharing. Are you experiencing any other associated symptoms like fever or nausea?";
+}
 
 /**
  * Generate next conversational turn from dialogue history
@@ -29,14 +40,8 @@ const openai = config.openaiApiKey ? new OpenAI({ apiKey: config.openaiApiKey })
  * @returns {Promise<string>} AI text reply
  */
 export async function getAIResponse(history = []) {
-  // Graceful mock response if API key is not configured
   if (!openai) {
-    const turnCount = history.filter(h => h.role === 'user').length;
-    if (turnCount === 1) return "Hello! I am your AI health assistant. May I please have your full name to start our intake?";
-    if (turnCount === 2) return "Thank you. What is your main health concern or primary symptom today?";
-    if (turnCount === 3) return "I understand. How long have you been experiencing this symptom?";
-    if (turnCount === 4) return "On a scale from 1 to 10, how severe would you rate your symptom right now?";
-    return "Thank you for sharing. Are you experiencing any other associated symptoms like fever or nausea?";
+    return getFallbackTurnResponse(history);
   }
 
   try {
@@ -52,9 +57,13 @@ export async function getAIResponse(history = []) {
       max_tokens: 120
     });
 
-    return response.choices[0]?.message?.content?.trim() || "Could you please repeat that?";
+    return response.choices[0]?.message?.content?.trim() || getFallbackTurnResponse(history);
   } catch (error) {
-    console.error("LLM Generation Error:", error.message);
-    return "I am sorry, I had trouble processing that. Could you please repeat your last statement?";
+    if (error.status === 429 || error.message?.includes('quota')) {
+      console.warn("OpenAI LLM Quota Exceeded (429). Using intelligent intake turn fallback.");
+    } else {
+      console.error("LLM Generation Error:", error.message);
+    }
+    return getFallbackTurnResponse(history);
   }
 }

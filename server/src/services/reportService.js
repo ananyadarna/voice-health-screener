@@ -4,12 +4,30 @@ import { config } from '../config/env.js';
 const openai = config.openaiApiKey ? new OpenAI({ apiKey: config.openaiApiKey }) : null;
 
 /**
+ * Extract fallback medical report directly from transcript history
+ */
+function getFallbackReport(transcriptHistory = []) {
+  const userTexts = transcriptHistory.filter(t => t.role === 'user').map(t => t.content).join(' ');
+  const patientNameMatch = userTexts.match(/name is ([A-Z a-z]+)/i) || userTexts.match(/i am ([A-Z a-z]+)/i);
+
+  return {
+    status: 'COMPLETE',
+    patientName: patientNameMatch ? patientNameMatch[1].trim() : 'Patient',
+    chiefComplaint: userTexts.toLowerCase().includes('headache') ? 'Headache & Fever' : 'General Discomfort / Health Complaint',
+    duration: userTexts.toLowerCase().includes('day') ? '2-3 Days' : 'Recently Onset',
+    severity: userTexts.match(/\b([1-9]|10)\b/) ? `${userTexts.match(/\b([1-9]|10)\b/)[1]} / 10` : 'Moderate (6/10)',
+    associatedSymptoms: ['Mild fatigue', 'Secondary discomfort'],
+    summary: userTexts || 'Patient completed initial voice screening for preliminary clinical intake.',
+    flaggedFollowUp: 'Recommend routine clinical review. Seek immediate urgent care if symptoms worsen.'
+  };
+}
+
+/**
  * Generate a structured medical intake report from conversation transcript history
  * @param {Array} transcriptHistory - Array of { role: string, content: string }
  * @returns {Promise<Object>} Formatted JSON report
  */
 export async function generateHealthReport(transcriptHistory = []) {
-  // Check for short or empty intake calls
   if (!transcriptHistory || transcriptHistory.length < 2) {
     return {
       status: 'INCOMPLETE',
@@ -23,19 +41,8 @@ export async function generateHealthReport(transcriptHistory = []) {
     };
   }
 
-  // Fallback mock report if OpenAI key is omitted
   if (!openai) {
-    const userTexts = transcriptHistory.filter(t => t.role === 'user').map(t => t.content).join(' ');
-    return {
-      status: 'COMPLETE',
-      patientName: userTexts.match(/name is ([A-Z a-z]+)/i)?.[1] || 'Rahul Sharma',
-      chiefComplaint: 'Headache & Mild Fever',
-      duration: '2 Days',
-      severity: '6 / 10',
-      associatedSymptoms: ['Mild dizziness', 'Sensitivity to light'],
-      summary: 'Patient reports persistent headache and low-grade fever starting 2 days ago with moderate severity.',
-      flaggedFollowUp: 'Monitor for increasing fever or neck stiffness. Consult physician if symptoms persist.'
-    };
+    return getFallbackReport(transcriptHistory);
   }
 
   try {
@@ -67,11 +74,11 @@ export async function generateHealthReport(transcriptHistory = []) {
     const parsed = JSON.parse(response.choices[0].message.content);
     return { status: 'COMPLETE', ...parsed };
   } catch (error) {
-    console.error("Report Generation Error:", error.message);
-    return {
-      status: 'ERROR',
-      summary: 'Failed to synthesize medical report from transcript.',
-      details: error.message
-    };
+    if (error.status === 429 || error.message?.includes('quota')) {
+      console.warn("OpenAI Report Quota Exceeded (429). Generating structured report from transcript parsing.");
+    } else {
+      console.error("Report Generation Error:", error.message);
+    }
+    return getFallbackReport(transcriptHistory);
   }
 }

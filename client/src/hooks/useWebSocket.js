@@ -1,11 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
- * Custom hook to handle WebSocket connection, audio queue playback, and message events
+ * Custom hook to handle WebSocket connection, audio queue playback, and Web Speech API fallback
  * @param {string} url - WebSocket server URL
  */
 export function useWebSocket(url = 'ws://localhost:5000') {
-  const [status, setStatus] = useState('IDLE'); // IDLE, CONNECTED, LISTENING, THINKING, SPEAKING, GENERATING_REPORT, DISCONNECTED
+  const [status, setStatus] = useState('IDLE');
   const [transcript, setTranscript] = useState([]);
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
@@ -13,6 +13,24 @@ export function useWebSocket(url = 'ws://localhost:5000') {
   const wsRef = useRef(null);
   const audioQueueRef = useRef([]);
   const isPlayingRef = useRef(false);
+
+  // Browser Web Speech API text-to-speech fallback
+  const speakTextWithBrowser = useCallback((text) => {
+    if ('speechSynthesis' in window && text) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      
+      setStatus('SPEAKING');
+      utterance.onend = () => setStatus('LISTENING');
+      utterance.onerror = () => setStatus('LISTENING');
+      
+      window.speechSynthesis.speak(utterance);
+    } else {
+      setStatus('LISTENING');
+    }
+  }, []);
 
   // Play incoming base64 audio payload sequentially
   const playNextAudio = useCallback(() => {
@@ -22,15 +40,21 @@ export function useWebSocket(url = 'ws://localhost:5000') {
     }
 
     isPlayingRef.current = true;
-    const base64Audio = audioQueueRef.current.shift();
+    const item = audioQueueRef.current.shift();
     
-    if (!base64Audio) {
-      playNextAudio();
+    if (!item || !item.audio) {
+      // Fall back to browser voice if audio stream is empty
+      if (item && item.text) {
+        speakTextWithBrowser(item.text);
+      } else {
+        setStatus('LISTENING');
+      }
+      isPlayingRef.current = false;
       return;
     }
 
     try {
-      const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+      const audio = new Audio(`data:audio/mp3;base64,${item.audio}`);
       setStatus('SPEAKING');
       
       audio.onended = () => {
@@ -38,31 +62,32 @@ export function useWebSocket(url = 'ws://localhost:5000') {
         playNextAudio();
       };
       
-      audio.onerror = (e) => {
-        console.error('Audio playback error:', e);
-        setStatus('LISTENING');
+      audio.onerror = () => {
+        speakTextWithBrowser(item.text);
         playNextAudio();
       };
 
-      audio.play().catch((err) => {
-        console.warn('Auto-play blocked or audio error:', err);
-        setStatus('LISTENING');
+      audio.play().catch(() => {
+        speakTextWithBrowser(item.text);
         playNextAudio();
       });
-    } catch (err) {
-      console.error('Audio creation error:', err);
+    } catch {
+      speakTextWithBrowser(item.text);
       playNextAudio();
     }
-  }, []);
+  }, [speakTextWithBrowser]);
 
-  // Enqueue base64 audio string
-  const queueAudioPayload = useCallback((base64Audio) => {
-    if (!base64Audio) return;
-    audioQueueRef.current.push(base64Audio);
+  // Enqueue audio item or fallback text
+  const queueAudioPayload = useCallback((base64Audio, text) => {
+    if (!base64Audio) {
+      speakTextWithBrowser(text);
+      return;
+    }
+    audioQueueRef.current.push({ audio: base64Audio, text });
     if (!isPlayingRef.current) {
       playNextAudio();
     }
-  }, [playNextAudio]);
+  }, [playNextAudio, speakTextWithBrowser]);
 
   // Connect & start intake call
   const startCall = useCallback(() => {
@@ -87,16 +112,20 @@ export function useWebSocket(url = 'ws://localhost:5000') {
             setStatus(payload.status);
             break;
 
-          case 'AGENT_TEXT':
+          case 'AGENT_TEXT': {
+            const agentReplyText = payload.text || '';
             setTranscript((prev) => [
               ...prev,
-              { role: 'assistant', text: payload.text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+              { role: 'assistant', text: agentReplyText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
             ]);
+            // Default browser voice fallback if server audio isn't returned
+            speakTextWithBrowser(agentReplyText);
             break;
+          }
 
           case 'AGENT_AUDIO':
             if (payload.audio) {
-              queueAudioPayload(payload.audio);
+              queueAudioPayload(payload.audio, '');
             }
             break;
 
@@ -137,7 +166,7 @@ export function useWebSocket(url = 'ws://localhost:5000') {
         setStatus('IDLE');
       }
     };
-  }, [url, status, queueAudioPayload]);
+  }, [url, status, queueAudioPayload, speakTextWithBrowser]);
 
   // Send textual user message turn
   const sendUserText = useCallback((text) => {
@@ -158,7 +187,6 @@ export function useWebSocket(url = 'ws://localhost:5000') {
     }
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (wsRef.current) {

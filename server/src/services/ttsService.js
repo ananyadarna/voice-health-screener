@@ -6,11 +6,10 @@ const openai = config.openaiApiKey ? new OpenAI({ apiKey: config.openaiApiKey })
 /**
  * Convert text response to base64 encoded audio string
  * @param {string} text - Response text to speak
- * @returns {Promise<string>} Base64 audio string (MP3)
+ * @returns {Promise<string>} Base64 audio string (MP3) or empty string on quota fallback
  */
 export async function textToSpeech(text) {
   if (!openai || !text) {
-    // Return empty string or dummy base64 snippet for testing without key
     return "";
   }
 
@@ -25,7 +24,12 @@ export async function textToSpeech(text) {
     const buffer = Buffer.from(await mp3Response.arrayBuffer());
     return buffer.toString('base64');
   } catch (error) {
-    console.error("TTS Synthesis Error:", error.message);
+    // Graceful handling for 429 Quota Exceeded or invalid key
+    if (error.status === 429 || error.message?.includes('quota')) {
+      console.warn("OpenAI API Quota Exceeded (429). Falling back to text & Web Speech API output.");
+    } else {
+      console.error("TTS Synthesis Error:", error.message);
+    }
     return "";
   }
 }
