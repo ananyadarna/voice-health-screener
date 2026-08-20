@@ -23,12 +23,21 @@ export function useWebSocket(url = 'ws://localhost:5000') {
       utterance.pitch = 1.0;
       
       setStatus('SPEAKING');
-      utterance.onend = () => setStatus('LISTENING');
-      utterance.onerror = () => setStatus('LISTENING');
+      window.isAISpeaking = true;
+
+      utterance.onend = () => {
+        setStatus('LISTENING');
+        window.isAISpeaking = false;
+      };
+      utterance.onerror = () => {
+        setStatus('LISTENING');
+        window.isAISpeaking = false;
+      };
       
       window.speechSynthesis.speak(utterance);
     } else {
       setStatus('LISTENING');
+      window.isAISpeaking = false;
     }
   }, []);
 
@@ -36,18 +45,20 @@ export function useWebSocket(url = 'ws://localhost:5000') {
   const playNextAudio = useCallback(() => {
     if (audioQueueRef.current.length === 0) {
       isPlayingRef.current = false;
+      window.isAISpeaking = false;
       return;
     }
 
     isPlayingRef.current = true;
+    window.isAISpeaking = true;
     const item = audioQueueRef.current.shift();
     
     if (!item || !item.audio) {
-      // Fall back to browser voice if audio stream is empty
       if (item && item.text) {
         speakTextWithBrowser(item.text);
       } else {
         setStatus('LISTENING');
+        window.isAISpeaking = false;
       }
       isPlayingRef.current = false;
       return;
@@ -56,9 +67,11 @@ export function useWebSocket(url = 'ws://localhost:5000') {
     try {
       const audio = new Audio(`data:audio/mp3;base64,${item.audio}`);
       setStatus('SPEAKING');
+      window.isAISpeaking = true;
       
       audio.onended = () => {
         setStatus('LISTENING');
+        window.isAISpeaking = false;
         playNextAudio();
       };
       
@@ -94,6 +107,7 @@ export function useWebSocket(url = 'ws://localhost:5000') {
     setError(null);
     setReport(null);
     setTranscript([]);
+    window.isAISpeaking = false;
 
     const ws = new WebSocket(url);
     wsRef.current = ws;
@@ -110,6 +124,11 @@ export function useWebSocket(url = 'ws://localhost:5000') {
         switch (payload.event) {
           case 'STATUS':
             setStatus(payload.status);
+            if (payload.status === 'SPEAKING' || payload.status === 'THINKING') {
+              window.isAISpeaking = true;
+            } else {
+              window.isAISpeaking = false;
+            }
             break;
 
           case 'AGENT_TEXT': {
@@ -118,7 +137,6 @@ export function useWebSocket(url = 'ws://localhost:5000') {
               ...prev,
               { role: 'assistant', text: agentReplyText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
             ]);
-            // Default browser voice fallback if server audio isn't returned
             speakTextWithBrowser(agentReplyText);
             break;
           }
@@ -141,10 +159,12 @@ export function useWebSocket(url = 'ws://localhost:5000') {
           case 'FINAL_REPORT':
             setReport(payload.report);
             setStatus('IDLE');
+            window.isAISpeaking = false;
             break;
 
           case 'ERROR':
             setError(payload.message || 'An error occurred during intake.');
+            window.isAISpeaking = false;
             break;
 
           default:
@@ -159,12 +179,14 @@ export function useWebSocket(url = 'ws://localhost:5000') {
       console.error('WebSocket Error:', err);
       setError('Failed to connect to backend voice server.');
       setStatus('IDLE');
+      window.isAISpeaking = false;
     };
 
     ws.onclose = () => {
       if (status !== 'GENERATING_REPORT') {
         setStatus('IDLE');
       }
+      window.isAISpeaking = false;
     };
   }, [url, status, queueAudioPayload, speakTextWithBrowser]);
 
@@ -185,6 +207,7 @@ export function useWebSocket(url = 'ws://localhost:5000') {
       setStatus('GENERATING_REPORT');
       wsRef.current.send(JSON.stringify({ event: 'END_CALL' }));
     }
+    window.isAISpeaking = false;
   }, []);
 
   useEffect(() => {

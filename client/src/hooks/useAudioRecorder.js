@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
- * Custom hook for Gemini-style live Speech-to-Text populating input bar
+ * Custom hook for Gemini-style Speech-to-Text with speaker echo suppression
  * @param {Function} onSpeechText - Callback receiving real-time transcribed text
  */
 export function useAudioRecorder(onSpeechText) {
@@ -12,12 +12,12 @@ export function useAudioRecorder(onSpeechText) {
   const streamRef = useRef(null);
   const onSpeechTextRef = useRef(onSpeechText);
 
-  // Keep callback reference updated without re-triggering hooks
+  // Keep callback reference updated
   useEffect(() => {
     onSpeechTextRef.current = onSpeechText;
   }, [onSpeechText]);
 
-  // Initialize Speech Recognition once
+  // Initialize Speech Recognition with AI speaker echo guard
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -27,6 +27,11 @@ export function useAudioRecorder(onSpeechText) {
       recognition.lang = 'en-US';
 
       recognition.onresult = (event) => {
+        // Ignore microphone input while AI is speaking out loud (prevents speaker echo!)
+        if (window.isAISpeaking) {
+          return;
+        }
+
         let transcript = '';
         for (let i = 0; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
