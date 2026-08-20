@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
- * Custom hook for Gemini-style Speech-to-Text with physical microphone auto-pausing during AI speech
+ * Custom hook for Gemini-style Speech-to-Text with strict mute/unmute control
  * @param {Function} onSpeechText - Callback receiving real-time transcribed text
  */
 export function useAudioRecorder(onSpeechText) {
@@ -13,11 +13,17 @@ export function useAudioRecorder(onSpeechText) {
   const onSpeechTextRef = useRef(onSpeechText);
   const resultOffsetRef = useRef(0);
   const isPausedByAIRef = useRef(false);
+  const isRecordingRef = useRef(false);
 
   // Keep callback reference updated
   useEffect(() => {
     onSpeechTextRef.current = onSpeechText;
   }, [onSpeechText]);
+
+  // Sync state ref
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
 
   // Expose global pause / resume functions for WebSocket TTS events
   useEffect(() => {
@@ -25,7 +31,7 @@ export function useAudioRecorder(onSpeechText) {
       isPausedByAIRef.current = true;
       if (recognitionRef.current) {
         try {
-          recognitionRef.current.stop();
+          recognitionRef.current.abort();
         } catch {
           // Ignored
         }
@@ -35,7 +41,7 @@ export function useAudioRecorder(onSpeechText) {
     window.resumeSpeechRecognition = () => {
       isPausedByAIRef.current = false;
       resultOffsetRef.current = 0;
-      if (recognitionRef.current && streamRef.current) {
+      if (recognitionRef.current && streamRef.current && isRecordingRef.current) {
         try {
           recognitionRef.current.start();
         } catch {
@@ -55,14 +61,14 @@ export function useAudioRecorder(onSpeechText) {
     resultOffsetRef.current = 0;
     if (recognitionRef.current) {
       try {
-        recognitionRef.current.stop();
+        recognitionRef.current.abort();
       } catch {
         // Ignored
       }
     }
   }, []);
 
-  // Initialize Speech Recognition with physical AI pause guard
+  // Initialize Speech Recognition with strict mute guard
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -72,8 +78,8 @@ export function useAudioRecorder(onSpeechText) {
       recognition.lang = 'en-US';
 
       recognition.onresult = (event) => {
-        // Ignore microphone input while AI is speaking out loud or paused
-        if (window.isAISpeaking || isPausedByAIRef.current) {
+        // Strict Mute Check: Ignore all input if mic is muted or AI is speaking out loud
+        if (!isRecordingRef.current || window.isAISpeaking || isPausedByAIRef.current) {
           return;
         }
 
@@ -94,8 +100,8 @@ export function useAudioRecorder(onSpeechText) {
       };
 
       recognition.onend = () => {
-        // Auto restart recognition ONLY if not paused by AI and session active
-        if (streamRef.current && !isPausedByAIRef.current && !window.isAISpeaking && recognitionRef.current) {
+        // Auto restart ONLY if mic is explicitly UNMUTED and AI is not speaking
+        if (isRecordingRef.current && streamRef.current && !isPausedByAIRef.current && !window.isAISpeaking && recognitionRef.current) {
           try {
             recognitionRef.current.start();
           } catch {
@@ -113,6 +119,8 @@ export function useAudioRecorder(onSpeechText) {
     setPermissionError(null);
     resultOffsetRef.current = 0;
     isPausedByAIRef.current = false;
+    isRecordingRef.current = true;
+    setIsRecording(true);
 
     try {
       if (recognitionRef.current) {
@@ -125,21 +133,24 @@ export function useAudioRecorder(onSpeechText) {
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      setIsRecording(true);
     } catch (error) {
       console.error('Microphone access error:', error);
       setPermissionError('Microphone access is denied or unsupported.');
+      isRecordingRef.current = false;
+      setIsRecording(false);
     }
   }, []);
 
-  // Stop microphone
+  // Stop microphone (Mute)
   const stopRecording = useCallback(() => {
     resultOffsetRef.current = 0;
     isPausedByAIRef.current = false;
+    isRecordingRef.current = false;
+    setIsRecording(false);
 
     if (recognitionRef.current) {
       try {
-        recognitionRef.current.stop();
+        recognitionRef.current.abort();
       } catch {
         // Ignored
       }
@@ -149,8 +160,6 @@ export function useAudioRecorder(onSpeechText) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
-
-    setIsRecording(false);
   }, []);
 
   return {
