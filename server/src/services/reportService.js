@@ -110,8 +110,8 @@ export async function generateHealthReport(transcriptHistory = []) {
     }
     `;
 
-    // Standard Groq model ID
-    const model = isGroq ? 'llama-3.1-8b-instant' : 'gpt-4o-mini';
+    // Verified Groq model: groq/compound-mini
+    const model = isGroq ? 'groq/compound-mini' : 'gpt-4o-mini';
 
     const response = await aiClient.chat.completions.create({
       model,
@@ -126,7 +126,7 @@ export async function generateHealthReport(transcriptHistory = []) {
 
     return extractSmartReport(transcriptHistory);
   } catch (error) {
-    console.warn(`[Report Error]: ${error.message}. Using fallback clinical extraction.`);
+    console.warn(`[Report Warning]: ${error.message}. Using fallback clinical extraction.`);
     return extractSmartReport(transcriptHistory);
   }
 }

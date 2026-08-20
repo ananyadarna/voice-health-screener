@@ -25,7 +25,7 @@ export async function transcribeAudio(audioBuffer, mimeType = 'audio/webm') {
 
   try {
     const file = new File([audioBuffer], 'input_audio.webm', { type: mimeType });
-    const model = config.groqApiKey ? 'whisper-large-v3' : 'whisper-1';
+    const model = config.groqApiKey ? 'whisper-large-v3-turbo' : 'whisper-1';
 
     const transcription = await aiClient.audio.transcriptions.create({
       file,

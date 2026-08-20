@@ -83,8 +83,8 @@ export async function getAIResponse(history = []) {
       ...history
     ];
 
-    // Standard Groq models: llama-3.1-8b-instant, llama3-70b-8192, llama3-8b-8192
-    const model = isGroq ? 'llama-3.1-8b-instant' : 'gpt-4o-mini';
+    // Verified Groq model: groq/compound-mini
+    const model = isGroq ? 'groq/compound-mini' : 'gpt-4o-mini';
 
     const response = await aiClient.chat.completions.create({
       model,
@@ -95,7 +95,7 @@ export async function getAIResponse(history = []) {
 
     return response.choices[0]?.message?.content?.trim() || getSmartIntakeTurn(history);
   } catch (error) {
-    console.warn(`[LLM Error]: ${error.message}. Using intake state machine turn.`);
+    console.warn(`[LLM Warning]: ${error.message}. Using intake state machine turn.`);
     return getSmartIntakeTurn(history);
   }
 }
