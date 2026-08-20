@@ -1,19 +1,17 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
- * Custom hook for zero-latency, non-duplicating voice speech recognition
- * @param {Function} onTranscript - Callback receiving instant spoken user phrase
+ * Custom hook for Gemini-style live Speech-to-Text populating input bar
+ * @param {Function} onSpeechText - Callback receiving real-time transcribed text
  */
-export function useAudioRecorder(onTranscript) {
+export function useAudioRecorder(onSpeechText) {
   const [isRecording, setIsRecording] = useState(false);
   const [permissionError, setPermissionError] = useState(null);
   
   const recognitionRef = useRef(null);
   const streamRef = useRef(null);
-  const sentIndicesRef = useRef(new Set());
-  const isListeningRef = useRef(false);
 
-  // Configure high-speed instant speech recognition
+  // Configure continuous Speech Recognition
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -23,15 +21,13 @@ export function useAudioRecorder(onTranscript) {
       recognition.lang = 'en-US';
 
       recognition.onresult = (event) => {
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal && !sentIndicesRef.current.has(i)) {
-            sentIndicesRef.current.add(i);
-            const transcriptText = event.results[i][0].transcript.trim();
-            
-            if (transcriptText && onTranscript) {
-              onTranscript(transcriptText);
-            }
-          }
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+
+        if (transcript.trim() && onSpeechText) {
+          onSpeechText(transcript.trim());
         }
       };
 
@@ -41,32 +37,20 @@ export function useAudioRecorder(onTranscript) {
         }
       };
 
-      recognition.onend = () => {
-        if (isListeningRef.current && recognitionRef.current) {
-          try {
-            recognitionRef.current.start();
-          } catch {
-            // Ignored
-          }
-        }
-      };
-
       recognitionRef.current = recognition;
     }
-  }, [onTranscript]);
+  }, [onSpeechText]);
 
-  // Start microphone & instant speech recognition
+  // Start microphone & real-time text population
   const startRecording = useCallback(async () => {
     setPermissionError(null);
-    sentIndicesRef.current.clear();
-    isListeningRef.current = true;
 
     try {
       if (recognitionRef.current) {
         try {
           recognitionRef.current.start();
         } catch {
-          // Already started
+          // Already active
         }
       }
 
@@ -81,9 +65,6 @@ export function useAudioRecorder(onTranscript) {
 
   // Stop microphone
   const stopRecording = useCallback(() => {
-    isListeningRef.current = false;
-    sentIndicesRef.current.clear();
-
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();

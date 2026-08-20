@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useState } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { StatusBadge } from './components/StatusBadge';
@@ -8,7 +8,7 @@ import { HealthReport } from './components/HealthReport';
 import { Stethoscope, ShieldCheck, HeartPulse } from 'lucide-react';
 
 export default function App() {
-  const lastSentTextRef = useRef('');
+  const [speechText, setSpeechText] = useState('');
 
   const {
     status,
@@ -20,24 +20,9 @@ export default function App() {
     sendUserText
   } = useWebSocket('ws://localhost:5000');
 
-  // Callback for clean single-turn voice speech recognition
-  const handleVoiceTranscript = (spokenText) => {
-    if (!spokenText || status === 'THINKING' || status === 'SPEAKING' || status === 'GENERATING_REPORT') {
-      return;
-    }
-
-    // Ignore exact duplicate phrases
-    if (lastSentTextRef.current === spokenText.trim().toLowerCase()) {
-      return;
-    }
-
-    lastSentTextRef.current = spokenText.trim().toLowerCase();
-    sendUserText(spokenText.trim());
-
-    // Clear duplicate guard after 3 seconds
-    setTimeout(() => {
-      lastSentTextRef.current = '';
-    }, 3000);
+  // Live real-time speech text populating input bar (Gemini UX pattern)
+  const handleLiveSpeechText = (text) => {
+    setSpeechText(text);
   };
 
   const {
@@ -45,11 +30,11 @@ export default function App() {
     permissionError,
     startRecording,
     stopRecording
-  } = useAudioRecorder(handleVoiceTranscript);
+  } = useAudioRecorder(handleLiveSpeechText);
 
   // Handle Start Call
   const handleStartCall = async () => {
-    lastSentTextRef.current = '';
+    setSpeechText('');
     initWsCall();
     await startRecording();
   };
@@ -58,6 +43,22 @@ export default function App() {
   const handleEndCall = () => {
     stopRecording();
     termWsCall();
+    setSpeechText('');
+  };
+
+  // Toggle Microphone
+  const handleToggleMic = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  // Send turn text
+  const handleSendText = (text) => {
+    sendUserText(text);
+    setSpeechText('');
   };
 
   return (
@@ -99,16 +100,19 @@ export default function App() {
             Interactive AI Patient Intake Screener
           </h2>
           <p className="text-sm text-slate-400 max-w-xl mx-auto mt-1">
-            Conduct a preliminary health assessment using natural voice turns in English or Hindi.
+            Conduct a preliminary health assessment using Gemini-style live voice input in English or Hindi.
           </p>
         </div>
 
-        {/* Live Call Control Dashboard */}
+        {/* Gemini-Style Live Call Control Dashboard */}
         <CallControls
           status={status}
           onStartCall={handleStartCall}
           onEndCall={handleEndCall}
-          onSendText={sendUserText}
+          onSendText={handleSendText}
+          speechText={speechText}
+          isMicActive={isRecording}
+          onToggleMic={handleToggleMic}
         />
 
         {/* Real-time Dialogue Transcript */}
