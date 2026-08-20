@@ -15,11 +15,10 @@ Target Information to Collect Sequentially:
 STRICT CONVERSATIONAL RULES:
 - Review the entire conversation history carefully before responding.
 - NEVER repeat a question that has already been asked or answered in previous turns.
-- Ask only ONE question at a time.
-- Keep your response very concise (1-2 short sentences maximum).
+- Ask only ONE short question at a time (maximum 1 sentence).
+- Be supportive, calm, and professional.
 - Progress sequentially to the next uncollected piece of information.
-- Once all 5 pieces of information are collected, thank the patient and state that you are preparing their summary report.
-- Speak in supportive, simple language in English or Hindi as used by the patient.
+- Speak in simple language in English or Hindi as used by the patient.
 `;
 
 let aiClient = null;
@@ -40,18 +39,9 @@ if (config.groqApiKey && config.groqApiKey.startsWith('gsk_')) {
  * Smart Intake State Machine (Guarantees progressive unrepeated questions)
  */
 function getSmartIntakeTurn(history = []) {
-  // Extract user messages
   const userTurns = history.filter(h => h.role === 'user');
-  const assistantTurns = history.filter(h => h.role === 'assistant');
   const count = userTurns.length;
-
   const fullText = userTurns.map(u => u.content).join(' ').toLowerCase();
-
-  // Check what has already been asked or answered
-  const hasName = fullText.includes('name') || count >= 1;
-  const hasSymptom = fullText.includes('headache') || fullText.includes('pain') || fullText.includes('fever') || count >= 2;
-  const hasDuration = fullText.includes('day') || fullText.includes('week') || fullText.includes('hour') || count >= 3;
-  const hasSeverity = fullText.match(/\b([1-9]|10)\b/) || count >= 4;
 
   if (count === 0) {
     return "Hello! I am your AI health intake assistant. May I please have your full name to get started?";
@@ -98,8 +88,8 @@ export async function getAIResponse(history = []) {
     const response = await aiClient.chat.completions.create({
       model,
       messages,
-      temperature: 0.5,
-      max_tokens: 100
+      temperature: 0.3,
+      max_tokens: 60
     });
 
     const reply = response.choices[0]?.message?.content?.trim();

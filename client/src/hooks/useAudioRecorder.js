@@ -1,36 +1,56 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
- * Custom hook for microphone recording and single-fire Web Speech Recognition
- * @param {Function} onTranscript - Callback receiving transcribed speech
+ * Custom hook for fast-response voice recognition with immediate silence detection
+ * @param {Function} onTranscript - Callback receiving user's spoken phrase
  */
 export function useAudioRecorder(onTranscript) {
   const [isRecording, setIsRecording] = useState(false);
   const [permissionError, setPermissionError] = useState(null);
   
   const recognitionRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
-  const processedIndicesRef = useRef(new Set());
+  const silenceTimerRef = useRef(null);
+  const currentTranscriptRef = useRef('');
 
-  // Initialize Web Speech Recognition
+  // Configure Web Speech Recognition for instant response
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
-      recognition.interimResults = false;
+      recognition.interimResults = true; // Enable interim results for instant detection
       recognition.lang = 'en-US';
 
       recognition.onresult = (event) => {
+        let interimText = '';
+        let finalText = '';
+
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal && !processedIndicesRef.current.has(i)) {
-            processedIndicesRef.current.add(i);
-            const transcriptText = event.results[i][0].transcript.trim();
-            if (transcriptText && onTranscript) {
-              onTranscript(transcriptText);
-            }
+          const text = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalText += text;
+          } else {
+            interimText += text;
           }
+        }
+
+        const candidateText = (finalText || interimText).trim();
+        if (candidateText) {
+          currentTranscriptRef.current = candidateText;
+
+          // Clear existing silence timer
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+          }
+
+          // Trigger response after 500ms of user silence (instant turn response!)
+          silenceTimerRef.current = setTimeout(() => {
+            if (currentTranscriptRef.current && onTranscript) {
+              onTranscript(currentTranscriptRef.current);
+              currentTranscriptRef.current = '';
+            }
+          }, 500);
         }
       };
 
@@ -44,10 +64,10 @@ export function useAudioRecorder(onTranscript) {
     }
   }, [onTranscript]);
 
-  // Start microphone and speech recognition
+  // Start microphone & instant speech engine
   const startRecording = useCallback(async () => {
     setPermissionError(null);
-    processedIndicesRef.current.clear();
+    currentTranscriptRef.current = '';
 
     try {
       if (recognitionRef.current) {
@@ -60,11 +80,6 @@ export function useAudioRecorder(onTranscript) {
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start(500);
-
       setIsRecording(true);
     } catch (error) {
       console.error('Microphone access error:', error);
@@ -72,8 +87,12 @@ export function useAudioRecorder(onTranscript) {
     }
   }, []);
 
-  // Stop microphone and speech recognition
+  // Stop microphone
   const stopRecording = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
+
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -82,16 +101,12 @@ export function useAudioRecorder(onTranscript) {
       }
     }
 
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
     }
 
     setIsRecording(false);
-    processedIndicesRef.current.clear();
+    currentTranscriptRef.current = '';
   }, []);
 
   return {
