@@ -10,8 +10,14 @@ export function useAudioRecorder(onSpeechText) {
   
   const recognitionRef = useRef(null);
   const streamRef = useRef(null);
+  const onSpeechTextRef = useRef(onSpeechText);
 
-  // Configure continuous Speech Recognition
+  // Keep callback reference updated without re-triggering hooks
+  useEffect(() => {
+    onSpeechTextRef.current = onSpeechText;
+  }, [onSpeechText]);
+
+  // Initialize Speech Recognition once
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -26,8 +32,8 @@ export function useAudioRecorder(onSpeechText) {
           transcript += event.results[i][0].transcript;
         }
 
-        if (transcript.trim() && onSpeechText) {
-          onSpeechText(transcript.trim());
+        if (transcript.trim() && onSpeechTextRef.current) {
+          onSpeechTextRef.current(transcript.trim());
         }
       };
 
@@ -39,7 +45,7 @@ export function useAudioRecorder(onSpeechText) {
 
       recognitionRef.current = recognition;
     }
-  }, [onSpeechText]);
+  }, []);
 
   // Start microphone & real-time text population
   const startRecording = useCallback(async () => {

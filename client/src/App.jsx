@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { StatusBadge } from './components/StatusBadge';
@@ -10,6 +10,7 @@ import { Stethoscope, ShieldCheck, HeartPulse } from 'lucide-react';
 export default function App() {
   const [speechText, setSpeechText] = useState('');
 
+  // 1. WebSocket Hook
   const {
     status,
     transcript,
@@ -20,11 +21,12 @@ export default function App() {
     sendUserText
   } = useWebSocket('ws://localhost:5000');
 
-  // Live real-time speech text populating input bar (Gemini UX pattern)
-  const handleLiveSpeechText = (text) => {
+  // 2. Stable Live Speech Callback
+  const handleLiveSpeechText = useCallback((text) => {
     setSpeechText(text);
-  };
+  }, []);
 
+  // 3. Audio Recorder Hook
   const {
     isRecording,
     permissionError,
