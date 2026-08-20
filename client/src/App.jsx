@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { StatusBadge } from './components/StatusBadge';
@@ -18,9 +18,11 @@ export default function App() {
     sendUserText
   } = useWebSocket('ws://localhost:5000');
 
-  // Audio Chunk Handler sent over WebSocket
-  const handleAudioChunk = (audioBlob) => {
-    // Standard text fallback stream or raw binary chunk
+  // Callback for instant real-time voice speech recognition
+  const handleVoiceTranscript = (spokenText) => {
+    if (spokenText && status !== 'THINKING' && status !== 'SPEAKING') {
+      sendUserText(spokenText);
+    }
   };
 
   const {
@@ -28,7 +30,7 @@ export default function App() {
     permissionError,
     startRecording,
     stopRecording
-  } = useAudioRecorder(handleAudioChunk);
+  } = useAudioRecorder(handleVoiceTranscript);
 
   // Handle Start Call
   const handleStartCall = async () => {
@@ -81,7 +83,7 @@ export default function App() {
             Interactive AI Patient Intake Screener
           </h2>
           <p className="text-sm text-slate-400 max-w-xl mx-auto mt-1">
-            Conduct a preliminary health assessment using natural voice turns in English or Hindi.
+            Conduct a preliminary health assessment using instant voice recognition in English or Hindi.
           </p>
         </div>
 
