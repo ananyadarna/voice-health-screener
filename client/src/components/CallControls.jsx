@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PhoneCall, PhoneOff, Send, Mic, MicOff } from 'lucide-react';
 
 /**
- * Gemini-Style Voice & Text Input Call Controls
+ * Human-Designed Light Theme Call Controls & Voice Input Bar
  */
 export function CallControls({
   status,
@@ -16,7 +16,7 @@ export function CallControls({
   const [inputText, setInputText] = useState('');
   const isCallActive = status !== 'IDLE' && status !== 'DISCONNECTED';
 
-  // Populate text input box in real-time as user speaks (Gemini pattern)
+  // Live real-time speech text population
   useEffect(() => {
     if (speechText) {
       setInputText(speechText);
@@ -32,20 +32,20 @@ export function CallControls({
   };
 
   return (
-    <div className="flex flex-col items-center gap-6 w-full max-w-2xl mx-auto my-4">
+    <div className="flex flex-col items-center gap-5 w-full max-w-2xl mx-auto my-2">
       {/* Audio Visualizer Waveform */}
       {isCallActive && (
         <div className="flex items-center gap-1.5 h-10">
           {[...Array(9)].map((_, i) => (
             <div
               key={i}
-              className={`w-1.5 rounded-full bg-gradient-to-t from-teal-500 to-emerald-400 transition-all duration-300 ${
+              className={`w-1.5 rounded-full bg-gradient-to-t from-teal-600 to-emerald-500 transition-all duration-300 ${
                 status === 'SPEAKING' || isMicActive
                   ? 'animate-pulse-fast'
-                  : 'h-3 opacity-30'
+                  : 'h-2.5 opacity-30'
               }`}
               style={{
-                height: isCallActive ? `${Math.sin(i + 1) * 16 + 24}px` : '10px',
+                height: isCallActive ? `${Math.sin(i + 1) * 16 + 22}px` : '10px',
                 animationDelay: `${i * 0.1}s`
               }}
             />
@@ -58,35 +58,35 @@ export function CallControls({
         {!isCallActive ? (
           <button
             onClick={onStartCall}
-            className="flex items-center gap-2.5 px-6 py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-lg shadow-emerald-600/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+            className="flex items-center gap-2.5 px-6 py-3.5 rounded-full bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm shadow-md shadow-teal-600/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
           >
-            <PhoneCall className="w-5 h-5" />
+            <PhoneCall className="w-4 h-4" />
             <span>Start Voice Intake</span>
           </button>
         ) : (
           <button
             onClick={onEndCall}
             disabled={status === 'GENERATING_REPORT'}
-            className="flex items-center gap-2.5 px-6 py-3.5 rounded-full bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-semibold shadow-lg shadow-rose-600/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+            className="flex items-center gap-2.5 px-6 py-3.5 rounded-full bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-semibold text-sm shadow-md shadow-rose-600/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
           >
-            <PhoneOff className="w-5 h-5" />
+            <PhoneOff className="w-4 h-4" />
             <span>End Call & Generate Summary</span>
           </button>
         )}
       </div>
 
-      {/* Gemini-Style Voice Input Bar */}
+      {/* Light Theme Gemini-Style Voice Input Bar */}
       {isCallActive && (
-        <form onSubmit={handleSubmit} className="flex items-center gap-2 w-full max-w-lg relative">
+        <form onSubmit={handleSubmit} className="flex items-center gap-2.5 w-full max-w-lg">
           {/* Push-to-Talk / Mic Toggle Button */}
           <button
             type="button"
             onClick={onToggleMic}
             title={isMicActive ? "Mute Microphone" : "Tap to Speak"}
-            className={`p-3 rounded-xl border transition-all ${
+            className={`p-3 rounded-2xl border transition-all ${
               isMicActive
-                ? 'bg-rose-500/20 border-rose-500/50 text-rose-400 animate-pulse'
-                : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                ? 'bg-rose-50 border-rose-200 text-rose-600 shadow-sm animate-pulse'
+                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm'
             }`}
           >
             {isMicActive ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
@@ -98,14 +98,14 @@ export function CallControls({
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             placeholder={isMicActive ? "Listening... Speak or type your answer..." : "Type or tap microphone to speak..."}
-            className="flex-1 px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-teal-500"
+            className="flex-1 px-4 py-3 rounded-2xl bg-white border border-slate-200 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-sm transition-all"
           />
 
           {/* Send Button */}
           <button
             type="submit"
             disabled={!inputText.trim()}
-            className="p-3 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white transition-colors shadow-md shadow-teal-600/20"
+            className="p-3 rounded-2xl bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white transition-all shadow-md shadow-teal-600/20"
           >
             <Send className="w-5 h-5" />
           </button>

@@ -2,46 +2,45 @@ import React from 'react';
 import { Mic, Activity, Volume2, FileText, CheckCircle2 } from 'lucide-react';
 
 /**
- * Renders status pill indicating current intake session state
- * @param {Object} props - { status: string }
+ * Renders status pill indicating current intake session state in light theme
  */
 export function StatusBadge({ status }) {
   const getBadgeStyle = () => {
     switch (status) {
       case 'LISTENING':
         return {
-          bg: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
-          icon: <Mic className="w-4 h-4 animate-bounce text-emerald-400" />,
+          bg: 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm',
+          icon: <Mic className="w-4 h-4 animate-bounce text-emerald-600" />,
           label: 'Listening to Patient...'
         };
       case 'THINKING':
         return {
-          bg: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
-          icon: <Activity className="w-4 h-4 animate-spin text-amber-400" />,
+          bg: 'bg-amber-50 border-amber-200 text-amber-700 shadow-sm',
+          icon: <Activity className="w-4 h-4 animate-spin text-amber-600" />,
           label: 'AI Thinking...'
         };
       case 'SPEAKING':
         return {
-          bg: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400',
-          icon: <Volume2 className="w-4 h-4 animate-pulse text-indigo-400" />,
+          bg: 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm',
+          icon: <Volume2 className="w-4 h-4 animate-pulse text-indigo-600" />,
           label: 'AI Speaking...'
         };
       case 'GENERATING_REPORT':
         return {
-          bg: 'bg-purple-500/10 border-purple-500/30 text-purple-400',
-          icon: <FileText className="w-4 h-4 animate-pulse text-purple-400" />,
+          bg: 'bg-purple-50 border-purple-200 text-purple-700 shadow-sm',
+          icon: <FileText className="w-4 h-4 animate-pulse text-purple-600" />,
           label: 'Synthesizing Health Report...'
         };
       case 'CONNECTED':
         return {
-          bg: 'bg-blue-500/10 border-blue-500/30 text-blue-400',
-          icon: <CheckCircle2 className="w-4 h-4 text-blue-400" />,
+          bg: 'bg-sky-50 border-sky-200 text-sky-700 shadow-sm',
+          icon: <CheckCircle2 className="w-4 h-4 text-sky-600" />,
           label: 'Connected'
         };
       default:
         return {
-          bg: 'bg-slate-800 border-slate-700 text-slate-400',
-          icon: <span className="w-2 h-2 rounded-full bg-slate-500" />,
+          bg: 'bg-slate-100 border-slate-200 text-slate-600',
+          icon: <span className="w-2 h-2 rounded-full bg-slate-400" />,
           label: 'Idle / Ready'
         };
     }
@@ -50,7 +49,7 @@ export function StatusBadge({ status }) {
   const style = getBadgeStyle();
 
   return (
-    <div className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-medium tracking-wide ${style.bg}`}>
+    <div className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-semibold tracking-wide ${style.bg}`}>
       {style.icon}
       <span>{style.label}</span>
     </div>
