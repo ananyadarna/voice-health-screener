@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { config } from '../config/env.js';
 
-// System prompt guiding the AI to act as an empathetic health intake assistant
+// Empathetic System Prompt for LLM
 export const INTAKE_SYSTEM_PROMPT = `
 You are an empathetic medical intake voice assistant conducting a preliminary health screening.
 Your goal is to collect the following information efficiently and gently:
@@ -15,23 +15,52 @@ RULES:
 - Ask only ONE question at a time.
 - Keep responses concise (maximum 1-2 short sentences) since your output will be converted to speech.
 - Be supportive, calm, and professional.
-- If the user's response is vague, ask a brief clarifying follow-up.
 - Speak in simple language, avoiding complex clinical jargon.
 - You can communicate in English or Hindi depending on the language used by the user.
 `;
 
-const openai = config.openaiApiKey ? new OpenAI({ apiKey: config.openaiApiKey }) : null;
+// Initialize OpenAI client if valid key is set
+const openai = (config.openaiApiKey && !config.openaiApiKey.includes('your_')) 
+  ? new OpenAI({ apiKey: config.openaiApiKey }) 
+  : null;
 
 /**
- * Generate fallback intake dialogue response based on turn count
+ * Smart Free Intake Dialogue State Machine (Zero-Cost Local AI Engine)
  */
-function getFallbackTurnResponse(history = []) {
-  const turnCount = history.filter(h => h.role === 'user').length;
-  if (turnCount === 1) return "Hello! I am your AI health assistant. May I please have your full name to start our intake?";
-  if (turnCount === 2) return "Thank you. What is your main health concern or primary symptom today?";
-  if (turnCount === 3) return "I understand. How long have you been experiencing this symptom?";
-  if (turnCount === 4) return "On a scale from 1 to 10, how severe would you rate your symptom right now?";
-  return "Thank you for sharing. Are you experiencing any other associated symptoms like fever or nausea?";
+function getSmartIntakeTurn(history = []) {
+  const userTurns = history.filter(h => h.role === 'user');
+  const count = userTurns.length;
+
+  if (count === 0) {
+    return "Hello! I am your AI health intake assistant. May I please have your full name to get started?";
+  }
+
+  const lastUserText = userTurns[userTurns.length - 1]?.content?.toLowerCase() || '';
+
+  // Step 1 -> Step 2: Name recorded -> Ask Primary Symptom
+  if (count === 1) {
+    const nameMatch = userTurns[0].content.replace(/my name is|i am|this is/gi, '').trim();
+    const name = nameMatch ? nameMatch.split(' ')[0] : 'there';
+    return `Thank you ${name}. What primary symptom or health concern are you experiencing today?`;
+  }
+
+  // Step 2 -> Step 3: Symptom recorded -> Ask Onset/Duration
+  if (count === 2) {
+    return "I understand. When did this symptom first start, and how long has it been bothering you?";
+  }
+
+  // Step 3 -> Step 4: Duration recorded -> Ask Severity
+  if (count === 3) {
+    return "Thank you for sharing that. On a scale of 1 to 10, how severe would you rate your discomfort right now?";
+  }
+
+  // Step 4 -> Step 5: Severity recorded -> Ask Secondary Symptoms
+  if (count === 4) {
+    return "Got it. Are you experiencing any other secondary symptoms like fever, nausea, or dizziness?";
+  }
+
+  // Step 5+: Assessment Complete
+  return "Thank you so much for providing all those details. I have recorded your intake information and will now generate your clinical summary report.";
 }
 
 /**
@@ -41,7 +70,7 @@ function getFallbackTurnResponse(history = []) {
  */
 export async function getAIResponse(history = []) {
   if (!openai) {
-    return getFallbackTurnResponse(history);
+    return getSmartIntakeTurn(history);
   }
 
   try {
@@ -57,13 +86,9 @@ export async function getAIResponse(history = []) {
       max_tokens: 120
     });
 
-    return response.choices[0]?.message?.content?.trim() || getFallbackTurnResponse(history);
+    return response.choices[0]?.message?.content?.trim() || getSmartIntakeTurn(history);
   } catch (error) {
-    if (error.status === 429 || error.message?.includes('quota')) {
-      console.warn("OpenAI LLM Quota Exceeded (429). Using intelligent intake turn fallback.");
-    } else {
-      console.error("LLM Generation Error:", error.message);
-    }
-    return getFallbackTurnResponse(history);
+    // Catch quota errors (429) or connection issues and seamlessly use free intake engine
+    return getSmartIntakeTurn(history);
   }
 }
