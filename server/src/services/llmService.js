@@ -19,7 +19,6 @@ RULES:
 - You can communicate in English or Hindi depending on the language used by the user.
 `;
 
-// Priority 1: Groq Cloud AI (100% Free) -> Priority 2: OpenAI
 let aiClient = null;
 let isGroq = false;
 
@@ -84,7 +83,8 @@ export async function getAIResponse(history = []) {
       ...history
     ];
 
-    const model = isGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini';
+    // Standard Groq models: llama-3.1-8b-instant, llama3-70b-8192, llama3-8b-8192
+    const model = isGroq ? 'llama-3.1-8b-instant' : 'gpt-4o-mini';
 
     const response = await aiClient.chat.completions.create({
       model,

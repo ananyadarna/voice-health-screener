@@ -110,12 +110,12 @@ export async function generateHealthReport(transcriptHistory = []) {
     }
     `;
 
-    const model = isGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini';
+    // Standard Groq model ID
+    const model = isGroq ? 'llama-3.1-8b-instant' : 'gpt-4o-mini';
 
     const response = await aiClient.chat.completions.create({
       model,
-      messages: [{ role: 'user', content: prompt }],
-      response_format: isGroq ? undefined : { type: 'json_object' }
+      messages: [{ role: 'user', content: prompt }]
     });
 
     const content = response.choices[0]?.message?.content?.trim() || '';
